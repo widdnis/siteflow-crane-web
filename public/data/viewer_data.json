@@ -1,0 +1,25 @@
+{
+  "schema": {
+    "version": "2.0.0"
+  },
+  "units": {
+    "output": "meters"
+  },
+  "coordinates": {
+    "target": "Unity Y-up"
+  },
+  "cranes": [
+    {
+      "id": "TC1",
+      "model": "소형 R40",
+      "position": {
+        "x": 90,
+        "y": 0,
+        "z": 78
+      },
+      "working_radius_m": 40,
+      "height_m": 56,
+      "base_direction_degrees_rhino": 173
+    }
+  ]
+}

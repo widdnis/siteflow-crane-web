@@ -1,0 +1,7 @@
+﻿html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+canvas { display: block; }
+#rotation-controls { position: fixed; bottom: 16px; left: 16px; width: min(320px, calc(100% - 56px)); padding: 12px; border-radius: 8px; background: #101a29ee; color: #eef5ff; font: 14px/1.6 system-ui, sans-serif; }
+#rotation-controls label { display: flex; justify-content: space-between; }
+#rotation-controls input { display: block; width: 100%; margin: 12px 0; accent-color: #ffb52e; }
+#rotation-controls button { padding: 8px 12px; border: 0; border-radius: 4px; background: #ffd329; color: #101a29; cursor: pointer; }
+#status { position: fixed; top: 16px; left: 16px; max-width: calc(100% - 56px); padding: 12px; border-radius: 8px; background: #101a29dd; color: #eef5ff; font: 14px/1.6 system-ui, sans-serif; white-space: pre-line; pointer-events: none; }
