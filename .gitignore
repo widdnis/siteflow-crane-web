@@ -1,3 +1,5 @@
 node_modules/
 .npm-cache/
 dist/
+# Private local QA inputs are retained locally, not published.
+tests/fixtures/

@@ -67,3 +67,26 @@ export function createCrane(d) {
   box(hook,'Tip',[0.45,-0.55,0],[0.4,0.65,0.65],5);
   return root;
 }
+
+/** UI-only controls for the existing procedural hierarchy; never mutate JSON. */
+export function createCraneController(crane, data) {
+  const trolley=crane.getObjectByName('Trolley'), wire=crane.getObjectByName('Wire'), hook=crane.getObjectByName('Hook'), cable=crane.getObjectByName('Cable');
+  const radius=data.working_radius_m, upperH=Math.min(3,data.height_m*.06);
+  const suspensionY=data.position.y+data.height_m-upperH+upperH*.7-.65-.25;
+  const maxCableLength=Math.max(.01,Math.min(data.height_m*.6,data.height_m-2));
+  const minCableLength=Math.min(1,maxCableLength);
+  let angle=((data.base_direction_degrees_rhino%360)+360)%360, distance=radius*.6, length=Math.min(12,data.height_m*.3);
+  const finite=v=>{if(!Number.isFinite(v))throw new Error('Invalid crane control value');return v;};
+  const control={
+    radius,maxCableLength,minCableLength,autoRotating:false,
+    get angle(){return angle;},get trolleyDistance(){return distance;},get cableLength(){return length;},
+    get hookHeight(){return suspensionY-length;},
+    get minHookHeight(){return suspensionY-maxCableLength;},get maxHookHeight(){return suspensionY-minCableLength;},
+    setRotation(degrees){angle=((finite(degrees)%360)+360)%360;setCraneRotation(crane,angle);},
+    setTrolley(metres){distance=THREE.MathUtils.clamp(finite(metres),0,radius);trolley.position.z=distance;},
+    setCableLength(metres){length=THREE.MathUtils.clamp(finite(metres),minCableLength,maxCableLength);cable.position.y=-length/2;cable.scale.y=length;hook.position.y=-.25-length;wire.position.y=-.25;},
+    setHookHeight(metres){control.setCableLength(suspensionY-finite(metres));},
+  };
+  control.setRotation(angle);control.setTrolley(distance);control.setCableLength(length);
+  return control;
+}
