@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createCrane, createCraneController } from './crane.js';
+import { buildSurroundings } from './surroundings.js';
 
 export function buildSiteScene(snapshot) {
   const data=snapshot.data, root=new THREE.Group(), records=[], omitted=[];
@@ -62,12 +63,21 @@ export function buildSiteScene(snapshot) {
     ring.name='Working Radius'; ring.position.set(c.position.x,c.position.y+0.04,c.position.z); root.add(ring); record.radiusRing=ring;
     if(c.base) { const base=flatPolygon(c.base,0x708f75,false); root.add(base); }
   }
+  let environment=null,siteCenter=null;
+  if(data.terrain?.available||data.surroundings)try {
+    environment=buildSurroundings(data);
+    for(const record of environment.records)register(record.object,record.kind,record.data,record.id);
+    omitted.push(environment.notice);
+    const ring=environment.region.ring;
+    siteCenter=new THREE.Vector3((Math.min(...ring.map(p=>p.x))+Math.max(...ring.map(p=>p.x)))/2,
+      environment.alignment.siteReference,(Math.min(...ring.map(p=>p.z))+Math.max(...ring.map(p=>p.z)))/2);
+  }catch(error){omitted.push(error.message);}
   if(data.roads == null) omitted.push('도로·차량 경로: missing (생성하지 않음)');
   else omitted.push('도로 영역은 표시하지 않습니다. 차량 경로는 차량 패널에서 확인하세요.');
   root.updateMatrixWorld(true);
   const bounds=new THREE.Box3().setFromObject(root);
   if(bounds.isEmpty()) omitted.push('표시 가능한 현장 형상 없음');
-  return {root,records,omitted,bounds};
+  return {root,records,omitted,bounds,environment,siteCenter};
 }
 
 export function setRecordHighlight(record,on) {
@@ -84,10 +94,10 @@ export function findSiteRecord(object) {
   for(let current=object;current;current=current.parent) if(current.userData.siteRecord) return current.userData.siteRecord;
   return null;
 }
-export function getViewPose(bounds,view,aspect=1) {
-  const center=bounds.isEmpty()?new THREE.Vector3():bounds.getCenter(new THREE.Vector3());
+export function getViewPose(bounds,view,aspect=1,siteCenter=null) {
+  const center=siteCenter?.clone()??(bounds.isEmpty()?new THREE.Vector3():bounds.getCenter(new THREE.Vector3()));
   const size=bounds.isEmpty()?new THREE.Vector3(1,1,1):bounds.getSize(new THREE.Vector3());
-  const radius=Math.max(1,size.length()/2), fov=THREE.MathUtils.degToRad(45);
+  const radius=siteCenter&&!bounds.isEmpty()?Math.max(1,...[bounds.min,bounds.max].map(p=>p.distanceTo(center))):Math.max(1,size.length()/2), fov=THREE.MathUtils.degToRad(45);
   const limit=Math.min(fov,2*Math.atan(Math.tan(fov/2)*Math.max(0.01,aspect)));
   const distance=radius/Math.sin(limit/2)*1.15;
   const directions={Top:[0,1,0],Front:[0,0,-1],Side:[-1,0,0],Free:[1,0.7,1]};

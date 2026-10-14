@@ -1,3 +1,5 @@
+import { validateTerrain } from './validateTerrain.js';
+import { validateSurroundings } from './validateSurroundings.js';
 export const MAX_BYTES = 20 * 1024 * 1024;
 const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 export function validateJson(data) {
@@ -8,9 +10,15 @@ export function validateJson(data) {
     if (++count > 500000 || depth > 48) fail('데이터 크기 또는 중첩 깊이 제한을 초과했습니다.');
     if (typeof v === 'number' && !Number.isFinite(v)) fail(path + ': 유한한 숫자가 필요합니다.');
     if (Array.isArray(v) && v.length > 20000) fail(path + ': 배열은 20,000개 이하만 지원합니다.');
-    if (v && typeof v === 'object') for (const [k, child] of Object.entries(v)) walk(child, path + '.' + k, depth + 1);
+    if (v && typeof v === 'object') for (const [k, child] of Object.entries(v)) {
+      // Surrounding meshes have their own bounded validation; keep legacy walk limits.
+      if(path==='$'&&k==='surroundings')continue;
+      walk(child, path + '.' + k, depth + 1);
+    }
   }
   walk(data);
+  validateTerrain(data.terrain);
+  validateSurroundings(data.surroundings);
   if (data.schema?.version !== '2.0.0') fail('schema.version 2.0.0이 필요합니다.');
   if (data.units?.output !== 'meters') fail('units.output은 meters여야 합니다. 좌표 변환은 수행하지 않습니다.');
   if (data.coordinates?.target !== 'Unity Y-up') fail('coordinates.target은 Unity Y-up이어야 합니다.');
