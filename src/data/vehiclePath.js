@@ -21,7 +21,7 @@ export function compileVehiclePath(raw) {
   return {id:raw.id,source_kind:raw.source_kind,closed:raw.closed===true,points,segments,length};
 }
 export function collectVehiclePaths(data) {
-  const actualPaths=[],demoPaths=[],warnings=[];
+  const actualPaths=[],centerlinePaths=[],demoPaths=[],warnings=[];
   const raw=data.roads?.vehicle_paths;
   let status=raw==null?'missing':Array.isArray(raw)&&raw.length===0?'empty':'invalid';
   const ids=new Set();
@@ -36,14 +36,27 @@ export function collectVehiclePaths(data) {
   if(Array.isArray(raw)) raw.forEach((path,i)=>add(path,'roads.vehicle_paths['+i+']'));
   else if(raw!=null) warnings.push('roads.vehicle_paths는 배열이어야 합니다.');
   if(Array.isArray(data.roads?.centerlines)) {
+    const centerlineIds=new Set();
     data.roads.centerlines.forEach((path,i)=>{
       if(path?.vehicle_enabled===true) add(path,'roads.centerlines['+i+']');
+      // Geometry preview is separate from exporter-declared vehicle routes.
+      // v1.6 exports C090 centerlines without source_kind and with vehicle_enabled:false.
+      // Keep those declarations intact; never promote DEMO/unknown sources or join roads.
+      if(path?.source_kind!=null&&path.source_kind!=='gh')return;
+      if(path?.vehicle_enabled===true&&path.source_kind==='gh')return;
+      try {
+        const compiled=compileVehiclePath(path);
+        if(centerlineIds.has(compiled.id))throw new Error('중복 중심선 id');
+        centerlineIds.add(compiled.id);
+        centerlinePaths.push({...compiled,source_field:'roads.centerlines['+i+']',path_kind:'centerline'});
+      } catch(error) { warnings.push('roads.centerlines['+i+']: '+error.message); }
     });
-    if(data.roads.centerlines.some(p=>p?.vehicle_enabled!==true)) warnings.push('중심선은 vehicle_enabled:true로 지정된 경우만 차량 경로로 사용합니다.');
+    if(centerlinePaths.length) warnings.push('JSON 중심선은 별도 미리보기로만 사용합니다. 원본 vehicle_enabled와 운용 경로 선언은 유지됩니다.');
   }
+  else if(data.roads?.centerlines!=null) warnings.push('roads.centerlines는 배열이어야 합니다.');
   if(data.vehicle_paths!=null) warnings.push('루트 vehicle_paths는 지원하지 않습니다. roads.vehicle_paths 계약을 사용해주세요.');
   if(actualPaths.length||demoPaths.length)status='present';
-  return {status,actualPaths,demoPaths,warnings};
+  return {status,actualPaths,centerlinePaths,demoPaths,warnings};
 }
 export function sampleVehiclePath(path,distance,direction=1) {
   const d=Math.min(path.length,Math.max(0,distance));

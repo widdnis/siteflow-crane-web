@@ -16,6 +16,8 @@ export function mountSiteViewer(snapshot,host,persistence={saved:null}) {
     <aside class="viewer-panel">
     <section class="vehicle-controls" aria-label="차량 경로 제어">
     <h3>경로 차량</h3><p id="vehicle-path-status"></p>
+    <label class="radius-toggle"><input id="vehicle-centerline" type="checkbox">JSON 현장 중심선 주행 미리보기</label>
+    <p id="vehicle-centerline-note" class="notice" hidden>JSON 중심선 좌표 그대로 주행합니다. 원본 vehicle_enabled 및 운용 경로 선언을 변경하지 않습니다. 중심선 간 자동 연결은 하지 않습니다.</p>
     <label class="demo-toggle"><input id="vehicle-demo" type="checkbox">DEMO 경로 켜기 (실제 도로 아님)</label>
     <p id="vehicle-demo-note" class="notice warn" hidden>DEMO · 별도 예시 경로입니다. 실제 현장·주행 안전 검증에 사용하지 마세요.</p>
     <label for="vehicle-route">주행 경로</label><select id="vehicle-route"></select>
@@ -37,7 +39,7 @@ export function mountSiteViewer(snapshot,host,persistence={saved:null}) {
     <p class="viewer-message" role="status" aria-live="polite"></p></aside></div>`;
   const $=selector=>host.querySelector(selector), stage=$('.viewer-stage');
   const labels=[];
-  let vehicle=null,vehicleDemo=false,viewBounds=model.bounds.clone();
+  let vehicle=null,vehicleDemo=false,vehicleCenterline=false,viewBounds=model.bounds.clone();
   let renderer, observer, controls, camera, selected=null, frame=null, previous=null, disposed=false, view='Free';
   let checkpoint=null;
   const listeners=[];
@@ -127,19 +129,23 @@ export function mountSiteViewer(snapshot,host,persistence={saved:null}) {
     listen($('#hook-height'),'input',()=>{selected?.control?.setHookHeight(Number($('#hook-height').value));syncCraneControls();render();});
 
     const routeInventory=snapshot.routes;
+    const centerlinePaths=routeInventory.centerlinePaths??[];
+    function selectedVehiclePaths() {
+      return vehicleDemo?[getDemoVehiclePath(),...routeInventory.demoPaths]:vehicleCenterline?centerlinePaths:routeInventory.actualPaths;
+    }
     function syncVehicle() {
-      if(!vehicle){$('#vehicle-state').textContent='미지원: 유효한 차량 경로 없음';return;}
+      if(!vehicle){$('#vehicle-state').textContent='주행 불가: 선택한 모드에 유효한 차량 경로 없음';return;}
       vehicle.sync();
       const m=vehicle.motion, names={idle:'초기화 / 정지',running:'주행 중',paused:'정지',ended:'경로 끝에서 정지'};
       $('#vehicle-speed').value=m.speed;$('#vehicle-speed-value').value=m.speed.toFixed(1)+' m/s';
       $('#vehicle-direction').value=String(m.direction);
-      $('#vehicle-state').textContent=(vehicleDemo?'DEMO · ':'JSON 경로 · ')+(names[m.status]??m.status)+' · '+(m.direction===1?'전진':'후진')+' · 현재 '+(m.running?m.speed:0).toFixed(1)+' m/s · '+m.distance.toFixed(1)+' / '+m.path.length.toFixed(1)+' m';
+      $('#vehicle-state').textContent=(vehicleDemo?'DEMO · ':vehicleCenterline?'JSON 중심선 미리보기 · ':'JSON 선언 경로 · ')+(names[m.status]??m.status)+' · '+(m.direction===1?'전진':'후진')+' · 현재 '+(m.running?m.speed:0).toFixed(1)+' m/s · '+m.distance.toFixed(1)+' / '+m.path.length.toFixed(1)+' m';
       $('#vehicle-start').disabled=m.running;$('#vehicle-stop').disabled=!m.running;
     }
     function queueFrame() { if(frame===null&&!disposed)frame=requestAnimationFrame(animate); }
     function changeVehicleRoute() {
       vehicle?.dispose();vehicle=null;
-      const paths=vehicleDemo?[getDemoVehiclePath(),...routeInventory.demoPaths]:routeInventory.actualPaths;
+      const paths=selectedVehiclePaths();
       const path=paths[Number($('#vehicle-route').value)];
       if(path){vehicle=createVehicleVisual(path,vehicleDemo);scene.add(vehicle.root);}
       for(const id of ['vehicle-direction','vehicle-speed','vehicle-start','vehicle-stop','vehicle-reset'])$('#'+id).disabled=!vehicle;
@@ -148,16 +154,20 @@ export function mountSiteViewer(snapshot,host,persistence={saved:null}) {
     }
     function changeVehicleMode(routeId=null) {
       vehicleDemo=$('#vehicle-demo').checked;
-      const paths=vehicleDemo?[getDemoVehiclePath(),...routeInventory.demoPaths]:routeInventory.actualPaths;
+      vehicleCenterline=!vehicleDemo&&$('#vehicle-centerline').checked;
+      const paths=selectedVehiclePaths();
       $('#vehicle-route').replaceChildren();$('#vehicle-route').disabled=!paths.length;
-      for(const [i,path]of paths.entries()){const option=document.createElement('option');option.value=i;option.textContent=(vehicleDemo?'DEMO · ':'JSON · ')+path.id;$('#vehicle-route').append(option);}
+      for(const [i,path]of paths.entries()){const option=document.createElement('option');option.value=i;option.textContent=(vehicleDemo?'DEMO · ':vehicleCenterline?'JSON 중심선 · ':'JSON 선언 · ')+path.id+' · '+path.length.toFixed(1)+' m'+(path.closed?' · 폐곡선':' · 열린 구간');$('#vehicle-route').append(option);}
       $('#vehicle-demo-note').hidden=!vehicleDemo;$('.demo-badge').hidden=!vehicleDemo;host.classList.toggle('demo-active',vehicleDemo);
-      $('#vehicle-path-status').textContent='실제 JSON 주행 경로 '+routeInventory.actualPaths.length+'개 · 데이터 상태 '+routeInventory.status+(routeInventory.warnings.length?' · '+routeInventory.warnings.join(' / '):'')+(routeInventory.actualPaths.length?' (GH 원천 선언, 현장 검증 미수행)':' · 실제 경로 missing');
+      $('#vehicle-centerline-note').hidden=!vehicleCenterline;
+      $('#vehicle-centerline').disabled=!centerlinePaths.length;
+      $('#vehicle-path-status').textContent='JSON 선언 차량 경로 '+routeInventory.actualPaths.length+'개 · 현장 중심선 미리보기 '+centerlinePaths.length+'개 · 선언 상태 '+routeInventory.status+(routeInventory.warnings.length?' · '+routeInventory.warnings.join(' / '):'')+(!routeInventory.actualPaths.length&&!centerlinePaths.length?' · 실제 JSON 주행 불가':'');
       const index=paths.findIndex(path=>path.id===routeId);
       $('#vehicle-route').value=String(index<0?0:index);
       changeVehicleRoute();
     }
-    listen($('#vehicle-demo'),'change',()=>changeVehicleMode());
+    listen($('#vehicle-demo'),'change',()=>{if($('#vehicle-demo').checked)$('#vehicle-centerline').checked=false;changeVehicleMode();});
+    listen($('#vehicle-centerline'),'change',()=>{if($('#vehicle-centerline').checked)$('#vehicle-demo').checked=false;changeVehicleMode();});
     listen($('#vehicle-route'),'change',changeVehicleRoute);
     listen($('#vehicle-direction'),'change',()=>{vehicle?.motion.setDirection(Number($('#vehicle-direction').value));syncVehicle();render();});
     listen($('#vehicle-speed'),'input',()=>{vehicle?.motion.setSpeed(Number($('#vehicle-speed').value));syncVehicle();render();});
@@ -197,6 +207,7 @@ export function mountSiteViewer(snapshot,host,persistence={saved:null}) {
     listen(window,'resize',resize);observer=new ResizeObserver(resize);observer.observe(stage);
     // Restore after defaults/route setup; no subsequent initialization may reset pose.
     $('#vehicle-demo').checked=saved?.vehicle?.demo??false;
+    $('#vehicle-centerline').checked=saved?.vehicle?.centerline??(!routeInventory.actualPaths.length&&centerlinePaths.length>0&&!$('#vehicle-demo').checked);
     changeVehicleMode(saved?.vehicle?.routeId);
     if(saved) {
       for(const record of model.records) {
@@ -210,7 +221,7 @@ export function mountSiteViewer(snapshot,host,persistence={saved:null}) {
         if(record.radiusRing)record.radiusRing.visible=saved.showRadius;
       }
       $('#show-radius').checked=saved.showRadius;
-      if(vehicle&&vehicle.motion.path.id===saved.vehicle?.routeId)vehicle.motion.restore(saved.vehicle);
+      if(vehicle&&vehicle.motion.path.id===saved.vehicle?.routeId&&vehicleDemo===saved.vehicle.demo&&vehicleCenterline===(saved.vehicle.centerline??false))vehicle.motion.restore(saved.vehicle);
       select(model.records.find(record=>record.id===saved.selectedId)??null);
       setView(saved.camera.view);
       camera.position.fromArray(saved.camera.position);camera.up.fromArray(saved.camera.up);
@@ -221,7 +232,7 @@ export function mountSiteViewer(snapshot,host,persistence={saved:null}) {
       cranes:model.records.filter(r=>r.control).map(r=>({id:r.id,angle:r.control.angle,trolley:r.control.trolleyDistance,hookHeight:r.control.hookHeight})),
       buildings:model.records.filter(r=>r.setHeight).map(r=>({id:r.id,ratio:r.heightRatio})),
       selectedId:selected?.id??null,showRadius:$('#show-radius').checked,
-      vehicle:vehicle?{demo:vehicleDemo,routeId:vehicle.motion.path.id,distance:vehicle.motion.distance,direction:vehicle.motion.direction,speed:vehicle.motion.speed}:null,
+      vehicle:vehicle?{demo:vehicleDemo,centerline:vehicleCenterline,routeId:vehicle.motion.path.id,distance:vehicle.motion.distance,direction:vehicle.motion.direction,speed:vehicle.motion.speed}:null,
       camera:{view,position:camera.position.toArray(),up:camera.up.toArray(),target:controls.target.toArray(),zoom:camera.zoom},
     });
     if(model.bounds.isEmpty())$('.viewer-message').textContent='표시 가능한 형상이 없습니다. 입력 데이터와 missing 항목을 확인해주세요.';
