@@ -30,6 +30,6 @@ export function buildSurroundings(data) {
       records.push({object:outlinedMesh(clipped,color,item.id,key==='buildings'?.85:1),kind,data:item,id:item.id});
     }
   }
-  const notice='주변 표시: 현장 외측 100m · 표고/CRS 미검증 · 수직 보정 0m (높이 차이의 원인 미확인)';
+  const notice=`주변 표시: 현장 외측 100m · 표고/CRS 미검증 · 공통 수직 보정 ${alignment.appliedOffset.toFixed(6)}m (경계 중앙값 기준)`;
   return {records,region,alignment,stats,notice};
 }

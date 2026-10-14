@@ -119,7 +119,7 @@ export function mountSiteViewer(snapshot,host,persistence={saved:null}) {
     const count=kind=>model.records.filter(r=>r.kind===kind).length;
     $('#status').textContent='최종 크레인 '+model.records.filter(r=>r.control).length+' · 실제 자재 '+count('실제 자재 박스')+' · 건물 '+count('건물')+'\n드래그: Orbit · 오른쪽 드래그: Pan · 휠: Zoom\nGH 오류 '+(snapshot.summary.errors?.length??'missing')+' · 원본 경고 '+(snapshot.summary.warnings?.length??'missing')+' (정보 패널의 GH 오류·경고에서 확인)';
     if(snapshot.data.terrain?.available) $('#status').textContent+='\n외부 지형 · 표고/CRS 미검증 · '+snapshot.data.terrain.mesh.vertices.length+' 정점 / '+snapshot.data.terrain.mesh.faces.length+' 면';
-    if(model.environment) $('#status').textContent+='\n주변 100m · 건물 '+model.environment.stats.buildingDisplayed+' / '+model.environment.stats.buildingSource+' · 도로 '+model.environment.stats.roadDisplayed+' / '+model.environment.stats.roadSource+' · 높이 보정 0m (미확인)';
+    if(model.environment) $('#status').textContent+='\n주변 100m · 건물 '+model.environment.stats.buildingDisplayed+' / '+model.environment.stats.buildingSource+' · 도로 '+model.environment.stats.roadDisplayed+' / '+model.environment.stats.roadSource+' · 공통 높이 보정 '+model.environment.alignment.appliedOffset.toFixed(6)+'m (경계 중앙값 기준)';
     listen($('#object-select'),'change',()=>select($('#object-select').value===''?null:model.records[Number($('#object-select').value)]));
     host.querySelectorAll('[data-view]').forEach(button=>listen(button,'click',()=>setView(button.dataset.view)));
     listen($('#show-radius'),'change',()=>{model.records.forEach(r=>{if(r.radiusRing)r.radiusRing.visible=$('#show-radius').checked;});render();});

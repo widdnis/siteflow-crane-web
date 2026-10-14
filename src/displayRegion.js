@@ -77,12 +77,21 @@ function pointSegmentDistance(p,a,b) {
   return Math.hypot(p.x-a.x-t*dx,p.z-a.z-t*dz);
 }
 export function compareBoundaryElevation(terrain,region) {
-  const siteHeights=region.ring.map(p=>p.y),samples=[];
-  for(const p of terrain?.mesh?.vertices??[])if(region.ring.some((a,i)=>pointSegmentDistance(p,a,region.ring[(i+1)%region.ring.length])<=0.001))samples.push(p.y);
-  const reference=siteHeights.reduce((sum,y)=>sum+y,0)/siteHeights.length;
-  // A geometric height difference is not evidence of an erroneous source datum.
-  // Apply no arbitrary alignment while elevation/CRS provenance is unverified.
-  return {appliedOffset:0,status:'UNVERIFIED_NO_SHIFT',siteReference:reference,samples:samples.length,
-    terrainBoundaryMin:samples.length?Math.min(...samples):null,terrainBoundaryMax:samples.length?Math.max(...samples):null,
-    deltaMin:samples.length?Math.min(...samples)-reference:null,deltaMax:samples.length?Math.max(...samples)-reference:null};
+  const siteHeights=region.ring.map(p=>p.y),boundaryHeights=new Map();
+  for(const p of terrain?.mesh?.vertices??[])if(region.ring.some((a,i)=>pointSegmentDistance(p,a,region.ring[(i+1)%region.ring.length])<=0.001)) {
+    const key=p.x+','+p.z;
+    if(boundaryHeights.has(key)&&Math.abs(boundaryHeights.get(key)-p.y)>1e-8)
+      throw new Error('주변 높이 정렬 중단: 같은 경계 XY에 서로 다른 높이가 있습니다.');
+    boundaryHeights.set(key,p.y);
+  }
+  const samples=[...boundaryHeights.values()].sort((a,b)=>a-b);
+  if(!terrain?.available||!samples.length||!samples.every(Number.isFinite))
+    throw new Error('주변 높이 정렬 중단: 유효한 지형 구멍 경계 높이가 없습니다.');
+  const middle=Math.floor(samples.length/2),median=samples.length%2?samples[middle]:(samples[middle-1]+samples[middle])/2;
+  const appliedOffset=-median,reference=siteHeights.reduce((sum,y)=>sum+y,0)/siteHeights.length;
+  // Display-only common shift; JSON coordinates and elevation provenance stay unchanged.
+  return {appliedOffset,status:'DEMO_BOUNDARY_MEDIAN_SHIFT',siteReference:reference,samples:samples.length,
+    terrainBoundaryMedian:median,terrainBoundaryMin:samples[0],terrainBoundaryMax:samples.at(-1),
+    deltaMin:samples[0]-reference,deltaMax:samples.at(-1)-reference,
+    residualMin:samples[0]+appliedOffset,residualMax:samples.at(-1)+appliedOffset};
 }
