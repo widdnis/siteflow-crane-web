@@ -1,4 +1,15 @@
 # SiteFlow Web
+
+## 🌐 웹사이트 바로 실행
+
+**[▶ SiteFlow 웹사이트 실행하기](https://widdnis.github.io/siteflow-crane-web/)**
+
+> 별도 설치 없이 브라우저에서 실행할 수 있습니다. 첫 화면에서 SiteFlow JSON 파일을 선택하거나 접근 가능한 JSON URL을 입력하세요.
+
+**웹사이트:** https://widdnis.github.io/siteflow-crane-web/
+
+---
+
 SiteFlow: JSON 파일·URL 입력, 3D 현장 Viewer, 2D 배치도 및 현장 보고서.
 
 - 실행: npm run dev → http://127.0.0.1:5173/siteflow-crane-web/
