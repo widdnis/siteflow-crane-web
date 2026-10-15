@@ -2,6 +2,7 @@ import './style.css';
 import { loadLocalJson } from './data/loadLocalJson.js';
 import { loadJsonUrl } from './data/loadJsonUrl.js';
 import { createAppState } from './data/state.js';
+import { mountShareDialog, readSharedData } from './share.js';
 
 document.body.innerHTML = `
 <main class="page">
@@ -12,7 +13,7 @@ document.body.innerHTML = `
 <form id="url-form" class="input-card" novalidate><h3>직접 JSON URL</h3><label for="json-url">HTTP(S) 주소</label><input id="json-url" type="url" placeholder="https://example.com/data.json" required><button type="submit">URL 불러오기</button><p class="muted">JSON 파일에 직접 연결되는 주소가 필요합니다. 사이트에서 외부 접근(CORS)을 허용해야 합니다.</p></form></div>
 <button id="resume" hidden>이전 유효한 데이터로 돌아가기</button></section>
 <p id="load-status" role="status" aria-live="polite"></p><p id="load-error" class="notice warn" role="alert" hidden></p><button id="cancel" hidden>로딩 취소</button>
-<section id="results" hidden><h2 id="result-title">데이터 확인</h2><p id="source" class="subtitle"></p><div id="summary" class="result-grid"></div>
+<section id="results" hidden><div class="result-heading"><h2 id="result-title">데이터 확인</h2><button id="share-result" type="button">결과 공유</button></div><p id="source" class="subtitle"></p><div id="summary" class="result-grid"></div>
 <details id="issues"><summary>GH 오류·경고·누락 확인</summary><div id="issue-list"></div></details>
 <div id="viewer-view"><p class="notice">현장 데이터의 시각화입니다. 표시된 크레인은 실제 장비 형상·운용 사양을 검증한 모델이 아닙니다.</p><div id="viewer-host" aria-label="현장 3D Viewer"></div><p id="viewer-error" class="notice warn" role="alert" hidden></p></div>
 <div id="layout-view" hidden><div id="layout-host"></div><p id="layout-error" class="notice warn" role="alert" hidden></p></div>
@@ -20,6 +21,7 @@ document.body.innerHTML = `
 <footer>SiteFlow</footer></main>`;
 const $ = selector => document.querySelector(selector);
 const state = createAppState();
+const shareDialog = mountShareDialog($('#share-result'), () => state.snapshot);
 let disposeViewer = null, disposeLayout = null, disposeReport = null, controller = null, viewVersion = 0;
 function textElement(tag, text, className) { const el=document.createElement(tag); el.textContent=text; if(className) el.className=className; return el; }
 function loading(value) {
@@ -42,6 +44,7 @@ async function request(loader) {
   } finally { if(state.isCurrent(id)) { state.finish(id); loading(false); } }
 }
 function showHome() {
+  shareDialog.close();
   controller?.abort(); state.home(); loading(false); stopViewer();
   $('#home').hidden=false; $('#results').hidden=true; $('nav').hidden=true;
   $('#resume').hidden=!state.snapshot; $('#load-error').hidden=true; $('#load-status').textContent='';
@@ -104,3 +107,9 @@ $('#cancel').addEventListener('click',()=>{ showHome(); $('#load-status').textCo
 $('[data-action="home"]').addEventListener('click',showHome);
 $('#resume').addEventListener('click',()=>showResults());
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>showResults(button.dataset.tab)));
+
+const sharedData = readSharedData(window.location.href);
+const initialLoad = sharedData !== null ? (() => {
+  $('#json-url').value = sharedData;
+  return request(signal => loadJsonUrl(sharedData, { signal }));
+})() : Promise.resolve();

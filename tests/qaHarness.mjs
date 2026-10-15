@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { createOutputFilename } from '../src/outputFilename.js';
 import { createAppState } from '../src/data/state.js';
+import { readSharedData } from '../src/share.js';
 export function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
 export const flush=()=>new Promise(resolve=>setImmediate(resolve));
 class Classes {
@@ -67,7 +68,7 @@ export async function loadFunction(file,names,context={}) {
  vm.runInNewContext(source+'\nglobalThis.__exports={'+names.join(',')+'};',sandbox,{filename:file});
  return sandbox.__exports;
 }
-export async function mainHarness() {
+export async function mainHarness({ pageUrl='https://example.com/siteflow-crane-web/', urlLoader=()=>{} } = {}) {
  const document=fakeDocument(),counts={mounted:{},disposed:{}},modules=new Map(),seen=[],failure={};
  const makeMount=tab=>(snapshot,host,persistence)=>{
   if(failure[tab])throw new Error(failure[tab]);
@@ -78,8 +79,8 @@ export async function mainHarness() {
  const mounts={mountSiteViewer:makeMount('viewer'),mountLayoutView:makeMount('layout'),mountReportView:makeMount('report')};
  let source=await readFile(new URL('../src/main.js',import.meta.url),'utf8');
  source=source.replace(/^import .*;\r?\n/gm,'').replace(/import\('\.\/(viewer|layoutView|reportView)\.js'\)/g,(_,name)=>'loadViewModule("'+name+'")');
- const sandbox={document,AbortController,console,createAppState,
-  loadLocalJson:()=>{},loadJsonUrl:()=>{},loadViewModule:async name=>modules.has(name)?await modules.get(name):mounts};
+ const sandbox={document,AbortController,console,createAppState,window:{location:{href:pageUrl}},readSharedData,mountShareDialog:()=>({close(){}}),
+  loadLocalJson:()=>{},loadJsonUrl:urlLoader,loadViewModule:async name=>modules.has(name)?await modules.get(name):mounts};
  const originalSetter=Object.getOwnPropertyDescriptor(FakeElement.prototype,'innerHTML').set;
  Object.defineProperty(document.body,'innerHTML',{set(html){
   originalSetter.call(this,html);
@@ -89,6 +90,6 @@ export async function mainHarness() {
  }});
  document.querySelector=selector=>selector==='#url-form button'?document.body.idMap.get('url-submit'):selector==='nav'?document.body.nav:selector==='[data-action="home"]'?document.body.homeButton:document.body.querySelector(selector);
  document.querySelectorAll=selector=>selector==='[data-tab]'?document.body.tabs:[];
- vm.runInNewContext(source+'\nglobalThis.__app={state,request,showHome,showResults};',sandbox,{filename:'main.js'});
+ vm.runInNewContext(source+'\nglobalThis.__app={state,request,showHome,showResults,initialLoad};',sandbox,{filename:'main.js'});
  return {app:sandbox.__app,document,nodes:document.body.idMap,counts,modules,mounts,seen,failure};
 }
